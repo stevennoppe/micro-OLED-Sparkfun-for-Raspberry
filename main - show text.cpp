@@ -1,4 +1,4 @@
-/*
+
  * Micro OLED breakout - example rotating cube in SPI mode
  *
  * Connection on a Raspberry Pi 3 model B v1.2 :
@@ -52,7 +52,7 @@ int main(int argc, char** argv)
 	
 	int middleX = oled.getLCDWidth() / 2;
   	int middleY = oled.getLCDHeight() / 2;
-	int textLength = 8 ;		// 10 charcaters in "test : 123"
+	int textLength = 8 ;		// 10 charcaters in "test 123"
 	int number = 123 ;
 	
 	// Try to set the cursor in the middle of the screen
