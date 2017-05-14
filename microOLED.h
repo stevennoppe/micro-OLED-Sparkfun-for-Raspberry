@@ -26,7 +26,6 @@ Changes were made by Steven Noppe so it is usable on a Raspberry Pi.
 4 April, 2017
 
 TODO : 
-		- SPI
 		- Parallel
 		- scrolling horizontal
 		- scrolling parameters like offset and speed...
@@ -44,14 +43,18 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define MICROOLED_H
 
 #include <stdio.h>
-#include <wiringPi.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdarg.h>
 #include <linux/i2c-dev.h>              // for the ioctl() function
+#include <linux/spi/spidev.h>
 #include <unistd.h>						// for the read() and write() function
 #include <fcntl.h>						// for the open() function
 #include <string.h>						// for memset() function)
+#include <time.h>
+#include <errno.h>
+
+#include <wiringPi.h>
 
 // macro's
 #define swap(a, b) { uint8_t t = a; a = b; b = t; }
@@ -61,8 +64,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 // I2C
 #define I2C_ADDRESS_SA0_0				0b0111100		// 0x3C (60)
 #define I2C_ADDRESS_SA0_1				0b0111101		// 0x3D	(61)
-#define I2C_COMMAND						0x00
-#define I2C_DATA						0x40
+#define I2C_COMMAND						0x00			// first byte 0x00 if
+														// you want to send a 
+														// command
+#define I2C_DATA						0x40			// first byte 0x40 if
+														// you want to send data
 
 #define LCDWIDTH						64
 #define LCDHEIGHT						48
@@ -144,15 +150,15 @@ class microOLED
 public:
 	microOLED() ;
 	microOLED(const microOLED& orig) ;
-	microOLED(uint8_t rst, uint8_t dc) ;
+	microOLED(uint8_t rst, uint8_t dc, uint8_t interface_mode) ;  
 	virtual ~microOLED() ;
 	
 	void begin(void) ;
 	void clear(uint8_t mode) ;
 	void display(void) ;
 	
-	void command(uint8_t c) ;
-	void data(uint8_t c) ;
+	int command(uint8_t c) ;
+	int data(uint8_t c) ;
 	
 	void invert(bool inv) ;
 	void flipVertical(bool flip) ;
@@ -217,7 +223,9 @@ public:
 	
 private:
 	int					i2c_fd ;
-	void i2cSetup() ;
+	int					spi_fd ;
+	int i2cSetup() ;
+	int spiSetup() ;
 	
 	timespec			waitTime ;
 	float				seconds ;

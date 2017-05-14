@@ -62,19 +62,14 @@ const char *microOLED::fontsPointer[]=
 	"fontlargenumber"
 } ;
 
-/*const unsigned char *microOLED::fontsPointer[]=
-{
-	"font5x7",
-	"font8x16",
-	"sevensegment",
-	"fontlargenumber"
-} ;
-*/
-
 /** \brief MicroOLED screen buffer.
 
 Page buffer 64 x 48 divided by 8 = 384 bytes
-Page buffer is required because in SPI mode, the host cannot read the SSD1306's GDRAM of the controller.  This page buffer serves as a scratch RAM for graphical functions.  All drawing function will first be drawn on this page buffer, only upon calling display() function will transfer the page buffer to the actual LCD controller's memory.
+Page buffer is required because in SPI mode, the host cannot read the 
+SSD1306's GDRAM of the controller.  This page buffer serves as a scratch RAM 
+for graphical functions.  All drawing function will first be drawn on this 
+page buffer, only upon calling display() function will transfer the page 
+buffer to the actual LCD controller's memory.
 */
 static uint8_t screenmemory[] = 
 {
@@ -146,25 +141,43 @@ microOLED::~microOLED()
 {
 }
 
-/** \brief MicroOLED Constructor -- I2C Mode
+/** \brief MicroOLED Constructor -- 0=SPI, 1=I2C, 2=parallel
 
 	Setup the MicroOLED class, configure the display to be controlled via a
-	I2C interface.
+	I2C, SPI or parallel interface.
 */
-microOLED::microOLED(uint8_t rst, uint8_t dc)
+microOLED::microOLED(uint8_t rst, uint8_t dc, uint8_t interface_mode)
 {
 	wiringPiSetup() ;
 	
-	rstPin		= rst ;				// Assign reset pin to private class variable
-	interface	= MODE_I2C ;		// Set interface to I2C
+	rstPin = rst ;				// Assign reset pin to private class variable
+	
+	switch (interface_mode)
+	{
+		case 0:
+			//configure SPI
+			dcPin = dc;
+			interface = MODE_SPI;	// Set interface mode to SPI
+			
+			break ;
+		case 1:
+			//configure I2C
+			interface = MODE_I2C ;		// Set interface to I2C
 
-	// Set the I2C Address based on whether DC is high (1) or low (0).
-	// The pin is pulled low by default, so if it's not explicitly set to
-	// 1, just default to 0.
-	if (dc == 1)
-		i2c_address = I2C_ADDRESS_SA0_1 ;
-	else
-		i2c_address = I2C_ADDRESS_SA0_0 ;
+			// Set the I2C Address based on whether DC is high (1) or low (0).
+			// The pin is pulled low by default, so if it's not explicitly 
+			// set to 1, just default to 0.
+			if (dc == 1)
+				i2c_address = I2C_ADDRESS_SA0_1 ;
+			else
+				i2c_address = I2C_ADDRESS_SA0_0 ;
+			break ;
+		
+		case 2:
+			// configure parallel
+			
+			break ;
+	}
 }
 
 void microOLED::begin()
@@ -175,25 +188,19 @@ void microOLED::begin()
 	setDrawMode(NORM);
 	setCursor(0,0);
 
-	/*
-	dcport		= portOutputRegister(digitalPinToPort(dcPin));
-	dcpinmask	= digitalPinToBitMask(dcPin);
-	dcreg		= portModeRegister(digitalPinToPort(dcPin));
-	 */
 	pinMode(dcPin, OUTPUT) ;
 	pinMode(rstPin, OUTPUT) ;
-
+	
 	// Set up the selected interface:
 	if (interface == MODE_SPI)
 	{
 		//Setup SPI
-		//spiSetup();
+		spiSetup();
 	}	
 	else if (interface == MODE_I2C)
 	{
 		// Setup I2C
 		i2cSetup();
-		//i2c.openI2c("/dev/i2c-1") ;
 	}
 	else if (interface == MODE_PARALLEL)
 	{
@@ -202,7 +209,7 @@ void microOLED::begin()
 	}
 
 	// Display reset routine
-	pinMode(rstPin, OUTPUT);		// Set RST pin as OUTPUT
+	//pinMode(rstPin, OUTPUT);		// Set RST pin as OUTPUT
 	digitalWrite(rstPin, HIGH);		// Initially set RST HIGH
 	waitMilliSec(5.0) ;				// VDD (3.3V) goes high at start, 
 									// lets just chill for 5 ms
@@ -256,14 +263,45 @@ void microOLED::begin()
  
  Setup the I2C communication
  */
-void microOLED::i2cSetup()
+int microOLED::i2cSetup()
 {
 	if ((i2c_fd = open("/dev/i2c-1", O_RDWR)) < 0) 
     // on a Raspberry Pi - model B rev 1 use : '/dev/i2c-0'
     {
 		// If it returns < 0 then something was wrong
 		// exit function with a -1 : failed to open de port
+		printf("Failed to open I2C line!") ;
+		
+		return -1 ;
     }
+	
+	return 0 ;
+}
+
+/** \brief Setup the I2C communication
+ 
+ Setup the SPI communication
+ */
+int microOLED::spiSetup()
+{
+	unsigned int speed = 1000000;
+		
+	errno = 0 ;
+	if ((spi_fd = open("/dev/spidev0.0", O_RDWR)) < 0) 
+    {
+		fprintf(stderr, "SPI open failed: %s\n", strerror (errno)) ;
+		return -1 ;
+    }
+	
+	errno = 0 ;
+		
+	if (ioctl(spi_fd, SPI_IOC_WR_MAX_SPEED_HZ, &speed) < 0)
+	{
+		fprintf(stderr, "SPI set speed failed: %s\n", strerror (errno)) ;
+		return -1 ;
+	}
+	
+	return 0 ;
 }
 
 /** \brief Send the display a command byte
@@ -273,47 +311,132 @@ void microOLED::i2cSetup()
 	to send the data. For I2C and Parallel we use the write functions
 	defined in hardware.cpp to send the data.
 */
-void microOLED::command(uint8_t c) 
+int microOLED::command(uint8_t c) 
 {
 	if (interface == MODE_SPI)
 	{
-		/*
-		*dcport &= ~dcpinmask;	// DC pin LOW for a command
-		*ssport &= ~sspinmask;	// SS LOW to initialize transfer
-		spiTransfer(c);			// Transfer the command byte
-		*ssport |= sspinmask;	// SS HIGH to end transfer
-		 */
+		struct spi_ioc_transfer spi;
+		memset (&spi, 0, sizeof (spi)) ;
+		
+		spi.tx_buf		=  0 ; 
+		spi.tx_buf		=  (unsigned long) &c ; 
+		spi.rx_buf		=  (unsigned long) &c ;
+		spi.len			=	sizeof(c) ;
+		spi.speed_hz	=	1000000 ;
+		spi.delay_usecs	=	0 ;
+		spi.bits_per_word = 8 ;
+				
+		errno = 0 ;
+		if (ioctl(spi_fd, SPI_IOC_MESSAGE(1), &spi) < 0)
+		{
+			 // failed to send byte
+			fprintf(stderr, "SPI send command failed: %s\n", strerror (errno)) ;
+			return -1 ;
+		}
+					
+		return 0 ;
 	}
 
 	else if (interface == MODE_I2C)
 	{
 		// Write to our address, make sure it knows we're sending a
-		// command:
-		// i2cWrite(i2c_address, I2C_COMMAND, c);
-		//i2c.writeI2c(i2c_address, I2C_COMMAND, c) ;
+		// command by settingb the first byte to 0x00
 		ssize_t result ;
 		char buf[2] ;
     	
-		buf[0]=I2C_COMMAND ;          
-		buf[1]=c ;         
+		buf[0]=I2C_COMMAND ;	// = 0x00 => send a command         
+		buf[1]=c ;				// = command to send
 
 		if (ioctl(i2c_fd, I2C_SLAVE, i2c_address) < 0)
         {
-            // Nothing found
-            //printf("Address : 0x%02x\n", i+address) ;
+            // didn't find a slave at that address
+			printf("Failed to find a i2c slave!\n") ;
+			return -1 ;
         }
         else
         {
+			// found the OLED, now send the command
             if ((result = write(i2c_fd, buf, 2)) != 2)
             {
-                //printf("Can't write to device! Only written %d byte(s)\n", result) ;
+                // failed to send the command
+				printf("Failed to send a command to the i2c slave!\n") ;
+				return -1 ;
             }
         }
+		
+		return 0 ;
 	}
 	else if (interface == MODE_PARALLEL)
 	{
 		// Write the byte to our parallel interface. Set DC LOW.
 		// parallelWrite(c, LOW);
+	}
+}
+
+/** \brief Send the display a data byte
+
+    Send a data byte via SPI, I2C or parallel to SSD1306 controller.
+	For SPI we set the DC and CS pins here, and call spiTransfer(byte)
+	to send the data. For I2C and Parallel we use the write functions
+	defined in hardware.cpp to send the data.
+*/
+int microOLED::data(uint8_t c) 
+{
+	if (interface == MODE_SPI)
+	{		
+		struct spi_ioc_transfer spi;
+		memset (&spi, 0, sizeof (spi)) ;
+		
+		spi.tx_buf		=  (unsigned long) &c ;
+		spi.rx_buf		=  (unsigned long) &c ;
+		spi.len			=	sizeof(c) ;
+		spi.speed_hz	=	1000000 ;
+		spi.delay_usecs	=	0 ;
+		spi.bits_per_word = 8 ;
+				
+		digitalWrite(dcPin, HIGH) ; // high to send data
+		errno = 0 ;
+		if (ioctl(spi_fd, SPI_IOC_MESSAGE(1), &spi) < 0)
+		{
+			// failed to send byte
+			fprintf(stderr, "SPI send data failed: %s\n", strerror (errno)) ;
+			return -1 ;
+		}
+		
+		digitalWrite(dcPin, LOW) ; // After sending data set pin back to LOW
+		
+		return 0 ;
+	}
+	else if (interface == MODE_I2C)
+	{
+		// Write to our address, make sure it knows we're sending a
+		// data byte by setting the first byte to 0x40
+		ssize_t result ;
+		char buf[2] ;
+    	
+		buf[0]=I2C_DATA ;			// = 0x40 => send data
+		buf[1]=c ;					// = data
+
+		if (ioctl(i2c_fd, I2C_SLAVE, i2c_address) < 0)
+        {
+            printf("Failed to find a i2c slave!\n") ;
+			return -1 ;
+        }
+        else
+        {
+			// found the OLED, now send the data
+            if ((result = write(i2c_fd, buf, 2)) != 2)
+            {
+                // failed to send data
+				printf("Failed to send data to the i2c slave!\n") ;
+				return -1 ;
+            }
+        }
+	}
+	else if (interface == MODE_PARALLEL)
+	{
+		// Write the byte to our parallel interface. Set DC HIGH.
+		// parallelWrite(c, HIGH);
 	}
 }
 
@@ -382,57 +505,6 @@ void microOLED::setPageAddress(uint8_t add)
 	add=0xb0|add ;
 	command(add) ;
 	return ;
-}
-
-/** \brief Send the display a data byte
-
-    Send a data byte via SPI, I2C or parallel to SSD1306 controller.
-	For SPI we set the DC and CS pins here, and call spiTransfer(byte)
-	to send the data. For I2C and Parallel we use the write functions
-	defined in hardware.cpp to send the data.
-*/
-void microOLED::data(uint8_t c) 
-{
-	if (interface == MODE_SPI)
-	{
-		/*
-		*dcport |= dcpinmask;	// DC HIGH for a data byte
-
-		*ssport &= ~sspinmask;	// SS LOW to initialize SPI transfer
-		spiTransfer(c); 		// Transfer the data byte
-		*ssport |= sspinmask;	// SS HIGH to end SPI transfer
-		 */
-	}
-	else if (interface == MODE_I2C)
-	{
-		// Write to our address, make sure it knows we're sending a
-		// data byte:
-		// i2cWrite(i2c_address, I2C_DATA, c);
-		//i2c.writeI2c(i2c_address, I2C_DATA, c) ;
-		ssize_t result ;
-		char buf[2] ;
-    	
-		buf[0]=I2C_DATA ;          
-		buf[1]=c ;         
-
-		if (ioctl(i2c_fd, I2C_SLAVE, i2c_address) < 0)
-        {
-            // Nothing found
-            //printf("Address : 0x%02x\n", i+address) ;
-        }
-        else
-        {
-            if ((result = write(i2c_fd, buf, 2)) != 2)
-            {
-                //printf("Can't write to device! Only written %d byte(s)\n", result) ;
-            }
-        }
-	}
-	else if (interface == MODE_PARALLEL)
-	{
-		// Write the byte to our parallel interface. Set DC HIGH.
-		// parallelWrite(c, HIGH);
-	}
 }
 
 /** \brief Set font type.
