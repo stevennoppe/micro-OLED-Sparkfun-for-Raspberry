@@ -211,10 +211,10 @@ void microOLED::begin()
 	// Display reset routine
 	//pinMode(rstPin, OUTPUT);		// Set RST pin as OUTPUT
 	digitalWrite(rstPin, HIGH);		// Initially set RST HIGH
-	waitMilliSec(5.0) ;				// VDD (3.3V) goes high at start, 
+	waitMiliSec(5.0) ;				// VDD (3.3V) goes high at start, 
 									// lets just chill for 5 ms
 	digitalWrite(rstPin, LOW);		// Bring RST low, reset the display
-	waitMilliSec(10.0) ;			// wait 10ms
+	waitMiliSec(10.0) ;			// wait 10ms
 	digitalWrite(rstPin, HIGH);		// Set RST HIGH, bring out of reset
 
 	// Display Init sequence for 64x48 OLED module
@@ -1324,16 +1324,19 @@ void microOLED::drawBitmap(uint8_t * bitArray)
  
  Wait ... milliseconds
  */
-int microOLED::waitMilliSec(float milliS)
+int microOLED::waitMiliSec(float miliS)
 {
-	nanoseconds = milliS * 1000000 ;
-
-	// 1 000 000 microseconds = 1 seconds
-	waitTime.tv_sec = seconds ;
-	waitTime.tv_nsec =  long(nanoseconds) ;	
-		
-	if (nanosleep(&waitTime, NULL) < 0) 
-		return 0 ;
+	if (miliS > 999)
+	{   
+        waitTime.tv_sec = (int)(miliS / 1000);		/* Must be Non-Negative */
+        /* Must be in range of 0 to 999999999 */
+		waitTime.tv_nsec = (miliS - ((long)waitTime.tv_sec * 1000)) * 1000000; 
+	}   
 	else
-		return 1 ;
+	{   
+        waitTime.tv_sec = 0;                         /* Must be Non-Negative */
+        waitTime.tv_nsec = miliS * 1000000;    /* Must be in range of 0 to 999999999 */
+   }   
+
+	return(nanosleep(&waitTime, NULL)) ;
 }

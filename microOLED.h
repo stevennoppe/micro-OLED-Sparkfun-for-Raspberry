@@ -221,6 +221,8 @@ public:
 	void scrollVertRight(uint8_t start, uint8_t stop) ;
 	void scrollVertLeft(uint8_t start, uint8_t stop) ;
 	
+	int waitMiliSec(float miliS) ;	
+	
 private:
 	int					i2c_fd ;
 	int					spi_fd ;
@@ -229,9 +231,8 @@ private:
 	
 	timespec			waitTime ;
 	float				seconds ;
-	long int			nanoseconds ;
-	int waitMilliSec(float milliS) ;	
-	
+	long long			nanoseconds ;
+		
 	uint8_t				csPin, 
 						dcPin, 
 						rstPin ;
