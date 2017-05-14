@@ -24,7 +24,8 @@
  * The library I used was originally for the Arduino, which I modified 
  * to work on a Raspberry Pi
  *
- * Rotating cube : this will show a 3D rotating cube 
+ * Show text : this will show text and a decimal number in the middle 
+ * of the OLED 
  * 
  */
 
@@ -47,8 +48,18 @@ int main(int argc, char** argv)
 	oled.clear(PAGE) ;
 		  
 	// prints a text with a decimal number on the OLED
+	oled.setFontType(0);
+	
+	int middleX = oled.getLCDWidth() / 2;
+  	int middleY = oled.getLCDHeight() / 2;
+	int textLength = 8 ;		// 10 charcaters in "test : 123"
 	int number = 123 ;
-	oled.print("test : %d", number);
+	
+	// Try to set the cursor in the middle of the screen
+	oled.setCursor(middleX - (oled.getFontWidth() * (textLength/2)),
+                   middleY - (oled.getFontHeight() / 2));
+  
+	oled.print("test %d", number);
 	oled.display();
   
 	return 0; 
