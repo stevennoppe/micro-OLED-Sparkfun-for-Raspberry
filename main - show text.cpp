@@ -25,7 +25,7 @@
  * to work on a Raspberry Pi
  *
  * Show text : this will show text and a decimal number in the middle 
- * of the OLED 
+ * of the OLED. 
  * 
  */
 
