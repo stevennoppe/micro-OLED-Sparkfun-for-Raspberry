@@ -25,8 +25,7 @@ version.
 Changes were made by Steven Noppe so it is usable on a Raspberry Pi.
 4 April, 2017
  
-TODO : 
-		- SPI
+TODO : 	
 		- Parallel
 		- scrolling horizontal
 		- scrolling parameters like offset and speed...
